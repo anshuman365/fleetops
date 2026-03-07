@@ -999,98 +999,143 @@ function Trips({apiFetch,toast}){
 // ═══════════════════════════════════════════════════════════════════════════
 // ADVANCED ROUTE PLANNER (Premium) — with Leaflet map + multiple routes
 // ═══════════════════════════════════════════════════════════════════════════
-function RoutePlanner({apiFetch,toast,onUpgrade}){
-  const {isPremium}=useAuth();
-  const [origin,setOrigin]=useState({name:"",lat:null,lng:null});
-  const [dest,setDest]=useState({name:"",lat:null,lng:null});
-  const [routes,setRoutes]=useState([]);
-  const [selRoute,setSelRoute]=useState(0);
-  const [loading,setLoading]=useState(false);
-  const [mapReady,setMapReady]=useState(false);
-  const mapRef=useRef(null);
-  const leafletMap=useRef(null);
-  const routeLayers=useRef([]);
+function RoutePlanner({apiFetch, toast, onUpgrade}){
+  const {isPremium} = useAuth();
 
-  if(!isPremium)return<PremiumGate feature="Advanced Route Planner" onUpgrade={onUpgrade}/>;
+  // --- ALL HOOKS FIRST (useState, useRef, useEffect) ---
+  const [origin, setOrigin] = useState({name: "", lat: null, lng: null});
+  const [dest, setDest] = useState({name: "", lat: null, lng: null});
+  const [routes, setRoutes] = useState([]);
+  const [selRoute, setSelRoute] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const [mapReady, setMapReady] = useState(false);
+  const mapRef = useRef(null);
+  const leafletMap = useRef(null);
+  const routeLayers = useRef([]);
 
-  // Initialize Leaflet map
-  useEffect(()=>{
-    if(!mapRef.current||leafletMap.current)return;
+  // Effect 1: Initialize Leaflet map (runs once)
+  useEffect(() => {
+    if (!mapRef.current || leafletMap.current) return;
     // Load Leaflet CSS + JS dynamically
-    if(!document.getElementById("leaflet-css")){
-      const link=document.createElement("link");link.id="leaflet-css";link.rel="stylesheet";
-      link.href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css";
+    if (!document.getElementById("leaflet-css")){
+      const link = document.createElement("link");
+      link.id = "leaflet-css";
+      link.rel = "stylesheet";
+      link.href = "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css";
       document.head.appendChild(link);
     }
-    const loadLeaflet=()=>{
-      if(window.L){initMap();return;}
-      const s=document.createElement("script");
-      s.src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js";
-      s.onload=initMap;document.head.appendChild(s);
+    const loadLeaflet = () => {
+      if (window.L) { initMap(); return; }
+      const s = document.createElement("script");
+      s.src = "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js";
+      s.onload = initMap;
+      document.head.appendChild(s);
     };
-    const initMap=()=>{
-      const map=window.L.map(mapRef.current,{zoomControl:true}).setView([22.9074872,79.0747270],5);
-      window.L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{attribution:'© OpenStreetMap',maxZoom:19}).addTo(map);
-      leafletMap.current=map;setMapReady(true);
+    const initMap = () => {
+      const map = window.L.map(mapRef.current, { zoomControl: true }).setView([22.9074872, 79.0747270], 5);
+      window.L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        attribution: '© OpenStreetMap',
+        maxZoom: 19
+      }).addTo(map);
+      leafletMap.current = map;
+      setMapReady(true);
     };
-    setTimeout(loadLeaflet,100);
-    return()=>{if(leafletMap.current){leafletMap.current.remove();leafletMap.current=null;}};
-  },[]);
+    setTimeout(loadLeaflet, 100);
+    return () => {
+      if (leafletMap.current) {
+        leafletMap.current.remove();
+        leafletMap.current = null;
+      }
+    };
+  }, []);
 
-  // Draw routes on map
-  useEffect(()=>{
-    if(!leafletMap.current||!window.L||routes.length===0)return;
+  // Effect 2: Draw routes on map when routes/selection/origin/dest change
+  useEffect(() => {
+    if (!leafletMap.current || !window.L || routes.length === 0) return;
     // Clear old layers
-    routeLayers.current.forEach(l=>l.remove());routeLayers.current=[];
+    routeLayers.current.forEach(l => l.remove());
+    routeLayers.current = [];
 
-    const colors=["#0ea5e9","#f59e0b","#a855f7"];
-    const weights=[5,4,4];
-    const opacities=[0.9,0.7,0.7];
+    const colors = ["#0ea5e9", "#f59e0b", "#a855f7"];
+    const weights = [5, 4, 4];
+    const opacities = [0.9, 0.7, 0.7];
 
-    routes.forEach((route,i)=>{
-      if(!route.geometry)return;
-      const coords=route.geometry.coordinates.map(([ln,la])=>[la,ln]);
-      if(coords.length===0)return;
-      const pl=window.L.polyline(coords,{
-        color:route.color||colors[i]||"#64748b",
-        weight:weights[i]||3,opacity:opacities[i]||0.6,
-        dashArray:i===selRoute?null:"8,6"
+    routes.forEach((route, i) => {
+      if (!route.geometry) return;
+      const coords = route.geometry.coordinates.map(([ln, la]) => [la, ln]);
+      if (coords.length === 0) return;
+      const pl = window.L.polyline(coords, {
+        color: route.color || colors[i] || "#64748b",
+        weight: weights[i] || 3,
+        opacity: opacities[i] || 0.6,
+        dashArray: i === selRoute ? null : "8,6"
       }).addTo(leafletMap.current);
-      const midIdx=Math.floor(coords.length/2);
-      const lbl=window.L.divIcon({html:`<div style="background:${route.color||colors[i]};color:#fff;padding:3px 8px;border-radius:20px;font-size:11px;font-weight:700;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,0.3)">${route.distance_km}km · ${route.duration_text}</div>`,className:"",iconAnchor:[50,10]});
-      const marker=window.L.marker(coords[midIdx],{icon:lbl}).addTo(leafletMap.current);
-      routeLayers.current.push(pl,marker);
+      const midIdx = Math.floor(coords.length / 2);
+      const lbl = window.L.divIcon({
+        html: `<div style="background:${route.color || colors[i]}; color:#fff; padding:3px 8px; border-radius:20px; font-size:11px; font-weight:700; white-space:nowrap; box-shadow:0 2px 8px rgba(0,0,0,0.3)">${route.distance_km}km · ${route.duration_text}</div>`,
+        className: "",
+        iconAnchor: [50, 10]
+      });
+      const marker = window.L.marker(coords[midIdx], { icon: lbl }).addTo(leafletMap.current);
+      routeLayers.current.push(pl, marker);
     });
 
     // Add markers for origin and dest
-    if(origin.lat&&dest.lat){
-      const oIcon=window.L.divIcon({html:`<div style="background:#22c55e;color:#fff;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;border:2px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.4)">A</div>`,className:"",iconAnchor:[14,14]});
-      const dIcon=window.L.divIcon({html:`<div style="background:#ef4444;color:#fff;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;border:2px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.4)">B</div>`,className:"",iconAnchor:[14,14]});
-      const om=window.L.marker([origin.lat,origin.lng],{icon:oIcon}).addTo(leafletMap.current);
-      const dm=window.L.marker([dest.lat,dest.lng],{icon:dIcon}).addTo(leafletMap.current);
-      routeLayers.current.push(om,dm);
+    if (origin.lat && dest.lat) {
+      const oIcon = window.L.divIcon({
+        html: `<div style="background:#22c55e; color:#fff; width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:800; border:2px solid #fff; box-shadow:0 2px 8px rgba(0,0,0,0.4)">A</div>`,
+        className: "",
+        iconAnchor: [14, 14]
+      });
+      const dIcon = window.L.divIcon({
+        html: `<div style="background:#ef4444; color:#fff; width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:800; border:2px solid #fff; box-shadow:0 2px 8px rgba(0,0,0,0.4)">B</div>`,
+        className: "",
+        iconAnchor: [14, 14]
+      });
+      const om = window.L.marker([origin.lat, origin.lng], { icon: oIcon }).addTo(leafletMap.current);
+      const dm = window.L.marker([dest.lat, dest.lng], { icon: dIcon }).addTo(leafletMap.current);
+      routeLayers.current.push(om, dm);
       // Fit bounds
-      const allCoords=routes.flatMap(r=>r.geometry?r.geometry.coordinates.map(([ln,la])=>[la,ln]):[]);
-      if(allCoords.length>0)leafletMap.current.fitBounds(window.L.latLngBounds(allCoords),{padding:[40,40]});
+      const allCoords = routes.flatMap(r => r.geometry ? r.geometry.coordinates.map(([ln, la]) => [la, ln]) : []);
+      if (allCoords.length > 0) {
+        leafletMap.current.fitBounds(window.L.latLngBounds(allCoords), { padding: [40, 40] });
+      }
     }
-  },[routes,selRoute,origin,dest]);
+  }, [routes, selRoute, origin, dest]);
 
-  const calcRoute=async()=>{
-    if(!origin.name||!dest.name){toast("Enter origin and destination","warn");return;}
-    if(!origin.lat||!dest.lat){toast("Please select a location from the dropdown suggestions","warn");return;}
-    setLoading(true);setRoutes([]);
-    const res=await apiFetch("/route/calculate",{method:"POST",body:JSON.stringify({origin_lat:origin.lat,origin_lng:origin.lng,dest_lat:dest.lat,dest_lng:dest.lng})});
+  // --- CONDITIONAL RETURN (AFTER ALL HOOKS) ---
+  if (!isPremium) {
+    return <PremiumGate feature="Advanced Route Planner" onUpgrade={onUpgrade} />;
+  }
+
+  // --- COMPONENT LOGIC (unchanged) ---
+  const calcRoute = async () => {
+    if (!origin.name || !dest.name) { toast("Enter origin and destination", "warn"); return; }
+    if (!origin.lat || !dest.lat) { toast("Please select a location from the dropdown suggestions", "warn"); return; }
+    setLoading(true);
+    setRoutes([]);
+    const res = await apiFetch("/route/calculate", {
+      method: "POST",
+      body: JSON.stringify({
+        origin_lat: origin.lat,
+        origin_lng: origin.lng,
+        dest_lat: dest.lat,
+        dest_lng: dest.lng
+      })
+    });
     setLoading(false);
-    if(!res||!res.ok){toast("Route calculation failed","error");return;}
-    const d=await res.json();
-    setRoutes(d.routes||[]);setSelRoute(0);
-    if(d.routes?.length>0)toast(`Found ${d.routes.length} route${d.routes.length>1?"s":""}!`,"success");
+    if (!res || !res.ok) { toast("Route calculation failed", "error"); return; }
+    const d = await res.json();
+    setRoutes(d.routes || []);
+    setSelRoute(0);
+    if (d.routes?.length > 0) toast(`Found ${d.routes.length} route${d.routes.length > 1 ? "s" : ""}!`, "success");
   };
 
-  const selRouteData=routes[selRoute];
-  const routeColors=["#0ea5e9","#f59e0b","#a855f7"];
+  const selRouteData = routes[selRoute];
+  const routeColors = ["#0ea5e9", "#f59e0b", "#a855f7"];
 
-  return(
+  // --- JSX (unchanged) ---
+  return (
     <div>
       <h1 style={{margin:"0 0 4px",fontSize:26,fontWeight:800,color:C.text}}>Route Planner</h1>
       <p style={{margin:"0 0 24px",color:C.muted,fontSize:13}}>Advanced routing with multi-route comparison and live map</p>
@@ -1102,34 +1147,39 @@ function RoutePlanner({apiFetch,toast,onUpgrade}){
           <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:20}}>
             <h3 style={{color:C.text,margin:"0 0 16px",fontSize:14,fontWeight:700}}>📍 Plan Your Route</h3>
             <LocInput label="Origin (A)" name="origin" value={origin.name}
-              onChange={e=>setOrigin(o=>({...o,name:e.target.value}))}
-              onLatLng={(lat,lng)=>setOrigin(o=>({...o,lat,lng}))} required/>
+              onChange={e => setOrigin(o => ({...o, name: e.target.value}))}
+              onLatLng={(lat, lng) => setOrigin(o => ({...o, lat, lng}))} required />
             <LocInput label="Destination (B)" name="destination" value={dest.name}
-              onChange={e=>setDest(d=>({...d,name:e.target.value}))}
-              onLatLng={(lat,lng)=>setDest(d=>({...d,lat,lng}))} required/>
-            <Btn onClick={calcRoute} disabled={loading} full icon={loading?I.refresh:I.navigate} size="lg">
-              {loading?"Calculating routes...":"Find Routes"}
+              onChange={e => setDest(d => ({...d, name: e.target.value}))}
+              onLatLng={(lat, lng) => setDest(d => ({...d, lat, lng}))} required />
+            <Btn onClick={calcRoute} disabled={loading} full icon={loading ? I.refresh : I.navigate} size="lg">
+              {loading ? "Calculating routes..." : "Find Routes"}
             </Btn>
           </div>
 
           {/* Route Options */}
-          {routes.length>0&&(
+          {routes.length > 0 && (
             <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:20}}>
               <h3 style={{color:C.text,margin:"0 0 14px",fontSize:14,fontWeight:700}}>🗺 Available Routes</h3>
-              {routes.map((r,i)=>(
-                <div key={i} onClick={()=>setSelRoute(i)}
-                  style={{background:selRoute===i?`${r.color||routeColors[i]}18`:"#0f1923",border:`1.5px solid ${selRoute===i?(r.color||routeColors[i]):C.border}`,borderRadius:10,padding:"12px 14px",marginBottom:8,cursor:"pointer",transition:"all 0.2s"}}>
+              {routes.map((r, i) => (
+                <div key={i} onClick={() => setSelRoute(i)}
+                  style={{
+                    background: selRoute === i ? `${r.color || routeColors[i]}18` : "#0f1923",
+                    border: `1.5px solid ${selRoute === i ? (r.color || routeColors[i]) : C.border}`,
+                    borderRadius: 10, padding: "12px 14px", marginBottom: 8,
+                    cursor: "pointer", transition: "all 0.2s"
+                  }}>
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
                     <div style={{display:"flex",alignItems:"center",gap:8}}>
-                      <div style={{width:10,height:10,borderRadius:"50%",background:r.color||routeColors[i]}}/>
-                      <span style={{color:selRoute===i?C.text:C.subtle,fontWeight:600,fontSize:13}}>{r.label}</span>
+                      <div style={{width:10,height:10,borderRadius:"50%",background:r.color || routeColors[i]}} />
+                      <span style={{color: selRoute === i ? C.text : C.subtle, fontWeight: 600, fontSize: 13}}>{r.label}</span>
                     </div>
-                    {i===0&&<span style={{fontSize:9,background:`${C.success}22`,color:C.success,padding:"2px 6px",borderRadius:10,fontWeight:700}}>FASTEST</span>}
+                    {i === 0 && <span style={{fontSize:9,background:`${C.success}22`,color:C.success,padding:"2px 6px",borderRadius:10,fontWeight:700}}>FASTEST</span>}
                   </div>
                   <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
                     <div style={{background:C.card,borderRadius:6,padding:"6px 10px"}}>
                       <div style={{fontSize:9,color:C.muted,textTransform:"uppercase",letterSpacing:0.5}}>Distance</div>
-                      <div style={{fontSize:14,fontWeight:800,color:r.color||routeColors[i]}}>{r.distance_km} km</div>
+                      <div style={{fontSize:14,fontWeight:800,color:r.color || routeColors[i]}}>{r.distance_km} km</div>
                     </div>
                     <div style={{background:C.card,borderRadius:6,padding:"6px 10px"}}>
                       <div style={{fontSize:9,color:C.muted,textTransform:"uppercase",letterSpacing:0.5}}>Est. Time</div>
@@ -1142,14 +1192,14 @@ function RoutePlanner({apiFetch,toast,onUpgrade}){
           )}
 
           {/* Turn-by-turn for selected route */}
-          {selRouteData&&selRouteData.steps&&selRouteData.steps.length>0&&(
+          {selRouteData && selRouteData.steps && selRouteData.steps.length > 0 && (
             <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:20,maxHeight:320,overflowY:"auto"}}>
               <h3 style={{color:C.text,margin:"0 0 14px",fontSize:14,fontWeight:700}}>🧭 Turn-by-Turn</h3>
-              {selRouteData.steps.slice(0,20).map((s,i)=>(
-                <div key={i} style={{display:"flex",gap:10,alignItems:"flex-start",padding:"8px 0",borderBottom:i<Math.min(selRouteData.steps.length,20)-1?`1px solid ${C.border}22`:"none"}}>
+              {selRouteData.steps.slice(0,20).map((s, i) => (
+                <div key={i} style={{display:"flex",gap:10,alignItems:"flex-start",padding:"8px 0",borderBottom: i < Math.min(selRouteData.steps.length,20)-1 ? `1px solid ${C.border}22` : "none"}}>
                   <div style={{width:20,height:20,borderRadius:"50%",background:C.border,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,color:C.muted,fontWeight:700,flexShrink:0,marginTop:1}}>{i+1}</div>
                   <div style={{flex:1}}>
-                    <div style={{color:C.text,fontSize:12,lineHeight:1.4}}>{s.instruction||s.name||"Continue"}</div>
+                    <div style={{color:C.text,fontSize:12,lineHeight:1.4}}>{s.instruction || s.name || "Continue"}</div>
                     <div style={{color:C.muted,fontSize:10,marginTop:2}}>{s.distance_km}km · {s.duration_min}min</div>
                   </div>
                 </div>
@@ -1162,22 +1212,22 @@ function RoutePlanner({apiFetch,toast,onUpgrade}){
         <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,overflow:"hidden",position:"sticky",top:20}}>
           <div style={{padding:"14px 20px",borderBottom:`1px solid ${C.border}33`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
             <h3 style={{margin:0,fontSize:14,fontWeight:700,color:C.text}}>🗺 Live Route Map</h3>
-            {routes.length>0&&<span style={{fontSize:11,color:C.muted}}>{routes.length} route{routes.length>1?"s":""} shown</span>}
+            {routes.length > 0 && <span style={{fontSize:11,color:C.muted}}>{routes.length} route{routes.length > 1 ? "s" : ""} shown</span>}
           </div>
           <div ref={mapRef} style={{height:560,background:C.bg}}>
-            {!mapReady&&<div style={{height:"100%",display:"flex",alignItems:"center",justifyContent:"center",color:C.muted,fontSize:13}}>Loading map...</div>}
+            {!mapReady && <div style={{height:"100%",display:"flex",alignItems:"center",justifyContent:"center",color:C.muted,fontSize:13}}>Loading map...</div>}
           </div>
-          {routes.length>0&&(
+          {routes.length > 0 && (
             <div style={{padding:"12px 16px",borderTop:`1px solid ${C.border}22`,display:"flex",gap:16,flexWrap:"wrap"}}>
-              {routes.map((r,i)=>(
-                <div key={i} style={{display:"flex",alignItems:"center",gap:6,cursor:"pointer"}} onClick={()=>setSelRoute(i)}>
-                  <div style={{width:24,height:3,background:r.color||routeColors[i],borderRadius:2,opacity:selRoute===i?1:0.5}}/>
-                  <span style={{fontSize:11,color:selRoute===i?C.text:C.muted,fontWeight:selRoute===i?600:400}}>{r.label} · {r.distance_km}km</span>
+              {routes.map((r, i) => (
+                <div key={i} style={{display:"flex",alignItems:"center",gap:6,cursor:"pointer"}} onClick={() => setSelRoute(i)}>
+                  <div style={{width:24,height:3,background:r.color || routeColors[i],borderRadius:2,opacity: selRoute === i ? 1 : 0.5}}/>
+                  <span style={{fontSize:11,color: selRoute === i ? C.text : C.muted, fontWeight: selRoute === i ? 600 : 400}}>{r.label} · {r.distance_km}km</span>
                 </div>
               ))}
             </div>
           )}
-          {routes.length===0&&!loading&&(
+          {routes.length === 0 && !loading && (
             <div style={{padding:32,textAlign:"center",color:C.muted,fontSize:13}}>Enter origin & destination above, then click <strong style={{color:C.text}}>Find Routes</strong> to see routes on the map.</div>
           )}
         </div>
