@@ -247,15 +247,25 @@ def get_trips():
 @app.route('/api/trips', methods=['POST'])
 def create_trip():
     data = request.json
+
+    # Helper: convert empty string to None
+    def float_or_none(val):
+        if val is None or val == "":
+            return None
+        try:
+            return float(val)
+        except ValueError:
+            return None
+
     trip = Trip(
         truck_id=data['truck_id'],
         driver_id=data['driver_id'],
         origin=data['origin'],
-        origin_lat=data.get('origin_lat'),
-        origin_lng=data.get('origin_lng'),
+        origin_lat=float_or_none(data.get('origin_lat')),
+        origin_lng=float_or_none(data.get('origin_lng')),
         destination=data['destination'],
-        dest_lat=data.get('dest_lat'),
-        dest_lng=data.get('dest_lng'),
+        dest_lat=float_or_none(data.get('dest_lat')),
+        dest_lng=float_or_none(data.get('dest_lng')),
         material=data.get('material', ''),
         load_tons=data.get('load_tons'),
         status='scheduled',

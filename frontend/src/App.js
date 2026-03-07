@@ -1,5 +1,4 @@
-import React from "react";
-import { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 
 const API = process.env.REACT_APP_API_URL || "https://noon-cell-trustee-tmp.trycloudflare.com/api";
 
@@ -118,6 +117,200 @@ function FormBtn({ onClick, children, variant = "primary", disabled }) {
       color: variant === "primary" ? "#fff" : "#94a3b8",
       opacity: disabled ? 0.5 : 1, transition: "all 0.2s"
     }}>{children}</button>
+  );
+}
+
+// ─── NEW COMPONENT: LocationInput with autocomplete ────────────────────────
+function LocationInput({ label, name, value, onChange, onLatLngChange, required }) {
+  const [suggestions, setSuggestions] = useState([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const timeoutRef = useRef(null);
+
+  const fetchSuggestions = async (query) => {
+    if (query.length < 3) {
+      setSuggestions([]);
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=5&addressdetails=1`);
+      const data = await res.json();
+      setSuggestions(data);
+    } catch (error) {
+      console.error("Autocomplete error", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleInputChange = (e) => {
+    const val = e.target.value;
+    onChange(e); // propagate to parent form
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    timeoutRef.current = setTimeout(() => {
+      fetchSuggestions(val);
+    }, 500);
+  };
+
+  const selectSuggestion = (sugg) => {
+    // Set the display name
+    const fakeEvent = { target: { name, value: sugg.display_name } };
+    onChange(fakeEvent);
+    // Set lat/lng
+    if (onLatLngChange) {
+      onLatLngChange(parseFloat(sugg.lat), parseFloat(sugg.lon));
+    }
+    setShowSuggestions(false);
+    setSuggestions([]);
+  };
+
+  const openMapPicker = () => {
+    // We'll use a separate modal (MapPicker) defined below
+    // For now, just a placeholder; we'll wire it in the Trips component
+  };
+
+  return (
+    <div style={{ marginBottom: 16, position: "relative" }}>
+      <label style={{ display: "block", marginBottom: 6, fontSize: 12, color: "#64748b", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>
+        {label}{required && <span style={{ color: "#f59e0b" }}> *</span>}
+      </label>
+      <div style={{ display: "flex", gap: 8 }}>
+        <input
+          name={name}
+          value={value}
+          onChange={handleInputChange}
+          onFocus={() => setShowSuggestions(true)}
+          onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+          placeholder="Type a location..."
+          style={{
+            flex: 1,
+            background: "#0a1520",
+            border: "1px solid #1e3a52",
+            borderRadius: 8,
+            padding: "10px 14px",
+            color: "#e2f0ff",
+            fontSize: 14,
+            outline: "none",
+          }}
+        />
+        <button
+          type="button"
+          onClick={() => onLatLngChange && onLatLngChange('map', name)} // we'll interpret this in parent
+          style={{
+            background: "#1e3a52",
+            border: "none",
+            color: "#0ea5e9",
+            padding: "10px 12px",
+            borderRadius: 8,
+            cursor: "pointer",
+            fontSize: 11,
+            fontWeight: 600,
+          }}
+        >
+          🗺️ Pick
+        </button>
+      </div>
+      {showSuggestions && suggestions.length > 0 && (
+        <ul style={{
+          position: "absolute",
+          top: "100%",
+          left: 0,
+          right: 0,
+          background: "#0f1923",
+          border: "1px solid #1e3a52",
+          borderRadius: 8,
+          marginTop: 4,
+          padding: 0,
+          listStyle: "none",
+          zIndex: 10,
+          maxHeight: "200px",
+          overflowY: "auto",
+        }}>
+          {suggestions.map((s, idx) => (
+            <li
+              key={idx}
+              onMouseDown={() => selectSuggestion(s)}
+              style={{
+                padding: "10px 14px",
+                borderBottom: idx < suggestions.length - 1 ? "1px solid #1e3a5233" : "none",
+                color: "#94a3b8",
+                fontSize: 13,
+                cursor: "pointer",
+                transition: "background 0.1s",
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.background = "#1e3a52"}
+              onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}
+            >
+              {s.display_name}
+            </li>
+          ))}
+        </ul>
+      )}
+      {loading && <div style={{ position: "absolute", right: 70, top: 38, color: "#64748b", fontSize: 11 }}>Loading...</div>}
+    </div>
+  );
+}
+
+// ─── NEW COMPONENT: MapPickerModal (uses iframe like RouteMap) ─────────────
+function MapPickerModal({ isOpen, onClose, onSelect, initialLat = 28.6139, initialLng = 77.2090 }) {
+  const [lat, setLat] = useState(initialLat);
+  const [lng, setLng] = useState(initialLng);
+  const mapRef = useRef(null);
+
+  useEffect(() => {
+    if (isOpen && mapRef.current) {
+      // Update iframe src when lat/lng change? Not needed, we'll just use a click-to-set approach.
+    }
+  }, [isOpen, lat, lng]);
+
+  const handleMapClick = () => {
+    // Since we can't directly interact with iframe, we'll use a static map and rely on user to click a "Use current map center" button
+    // Alternatively, we can embed Leaflet here, but that adds complexity.
+    // Simpler: let user pan the map and then click "Use this location" which uses the center coordinates.
+    // We'll approximate by using the initial lat/lng as the center of the embedded map.
+  };
+
+  const embedUrl = `https://www.openstreetmap.org/export/embed.html?bbox=${lng-0.05},${lat-0.05},${lng+0.05},${lat+0.05}&layer=mapnik&marker=${lat},${lng}`;
+
+  if (!isOpen) return null;
+
+  return (
+    <Modal title="Select Location on Map" onClose={onClose}>
+      <div style={{ marginBottom: 16 }}>
+        <div style={{ height: 300, background: "#0a1520", border: "1px solid #1e3a52", borderRadius: 8, overflow: "hidden" }}>
+          <iframe
+            ref={mapRef}
+            src={embedUrl}
+            style={{ width: "100%", height: "100%", border: "none" }}
+            title="Map Picker"
+          />
+        </div>
+        <p style={{ color: "#94a3b8", fontSize: 12, marginTop: 8 }}>
+          Pan the map to your desired location. The marker shows the current selected coordinates.
+        </p>
+        <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+          <input
+            type="number"
+            value={lat}
+            onChange={(e) => setLat(parseFloat(e.target.value))}
+            placeholder="Latitude"
+            style={{ flex: 1, background: "#0a1520", border: "1px solid #1e3a52", borderRadius: 8, padding: "8px", color: "#e2f0ff" }}
+          />
+          <input
+            type="number"
+            value={lng}
+            onChange={(e) => setLng(parseFloat(e.target.value))}
+            placeholder="Longitude"
+            style={{ flex: 1, background: "#0a1520", border: "1px solid #1e3a52", borderRadius: 8, padding: "8px", color: "#e2f0ff" }}
+          />
+        </div>
+      </div>
+      <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+        <FormBtn variant="secondary" onClick={onClose}>Cancel</FormBtn>
+        <FormBtn onClick={() => { onSelect(lat, lng); onClose(); }}>Use This Location</FormBtn>
+      </div>
+    </Modal>
   );
 }
 
@@ -445,7 +638,7 @@ function Drivers() {
   );
 }
 
-// ─── TRIPS PAGE ───────────────────────────────────────────────────────────────
+// ─── TRIPS PAGE – UPDATED with new location input and map picker ────────────
 function Trips() {
   const [trips, setTrips] = useState([]);
   const [trucks, setTrucks] = useState([]);
@@ -458,6 +651,10 @@ function Trips() {
     origin_lat: "", origin_lng: "", dest_lat: "", dest_lng: ""
   });
 
+  // State for map picker
+  const [mapPickerOpen, setMapPickerOpen] = useState(false);
+  const [pickerTarget, setPickerTarget] = useState(null); // 'origin' or 'dest'
+
   const load = () => {
     const q = filter === "all" ? "" : `?status=${filter}`;
     fetch(`${API}/trips${q}`).then(r => r.json()).then(setTrips);
@@ -468,13 +665,37 @@ function Trips() {
     fetch(`${API}/drivers`).then(r => r.json()).then(setDrivers);
   }, []);
 
-  const handleChange = e => setForm(f => ({ ...f, [e.target.name]: e.target.value }));
+  const handleChange = (e) => setForm(f => ({ ...f, [e.target.name]: e.target.value }));
+
+  // New handler for lat/lng changes from autocomplete or map picker
+  const handleLatLngChange = (lat, lng, target) => {
+    if (target === 'origin') {
+      setForm(f => ({ ...f, origin_lat: lat, origin_lng: lng }));
+    } else if (target === 'dest') {
+      setForm(f => ({ ...f, dest_lat: lat, dest_lng: lng }));
+    }
+  };
+
+  const openMapPicker = (target) => {
+    setPickerTarget(target);
+    setMapPickerOpen(true);
+  };
+
+  const onMapSelect = (lat, lng) => {
+    if (pickerTarget === 'origin') {
+      setForm(f => ({ ...f, origin_lat: lat, origin_lng: lng }));
+    } else if (pickerTarget === 'dest') {
+      setForm(f => ({ ...f, dest_lat: lat, dest_lng: lng }));
+    }
+  };
 
   const geocode = async (address, prefix) => {
     try {
       const r = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(address)}&format=json&limit=1`);
       const d = await r.json();
-      if (d[0]) setForm(f => ({ ...f, [`${prefix}_lat`]: d[0].lat, [`${prefix}_lng`]: d[0].lon }));
+      if (d[0]) {
+        setForm(f => ({ ...f, [`${prefix}_lat`]: d[0].lat, [`${prefix}_lng`]: d[0].lon }));
+      }
     } catch { }
   };
 
@@ -581,28 +802,45 @@ function Trips() {
           <Field label="Material" name="material" value={form.material} onChange={handleChange}
             options={[{ value: "sand", label: "🏖️ Sand" }, { value: "gitti", label: "🪨 Gitti" }, { value: "stone", label: "🪨 Stone" }, { value: "cement", label: "🏗️ Cement" }, { value: "other", label: "📦 Other" }]} />
           <Field label="Load (Tons)" name="load_tons" type="number" value={form.load_tons} onChange={handleChange} />
-          <div style={{ marginBottom: 16 }}>
-            <label style={{ display: "block", marginBottom: 6, fontSize: 12, color: "#64748b", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>Origin <span style={{ color: "#f59e0b" }}>*</span></label>
-            <div style={{ display: "flex", gap: 8 }}>
-              <input name="origin" value={form.origin} onChange={handleChange} placeholder="e.g. Faridabad, Haryana" style={{ flex: 1, background: "#0a1520", border: "1px solid #1e3a52", borderRadius: 8, padding: "10px 14px", color: "#e2f0ff", fontSize: 14, outline: "none" }} />
-              <button onClick={() => geocode(form.origin, "origin")} style={{ background: "#1e3a52", border: "none", color: "#0ea5e9", padding: "10px 12px", borderRadius: 8, cursor: "pointer", fontSize: 11, fontWeight: 600 }}>📍 Geo</button>
-            </div>
-          </div>
-          <div style={{ marginBottom: 16 }}>
-            <label style={{ display: "block", marginBottom: 6, fontSize: 12, color: "#64748b", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>Destination <span style={{ color: "#f59e0b" }}>*</span></label>
-            <div style={{ display: "flex", gap: 8 }}>
-              <input name="destination" value={form.destination} onChange={handleChange} placeholder="e.g. Delhi NCR" style={{ flex: 1, background: "#0a1520", border: "1px solid #1e3a52", borderRadius: 8, padding: "10px 14px", color: "#e2f0ff", fontSize: 14, outline: "none" }} />
-              <button onClick={() => geocode(form.destination, "dest")} style={{ background: "#1e3a52", border: "none", color: "#0ea5e9", padding: "10px 12px", borderRadius: 8, cursor: "pointer", fontSize: 11, fontWeight: 600 }}>📍 Geo</button>
-            </div>
-          </div>
+
+          {/* Origin with autocomplete and map picker */}
+          <LocationInput
+            label="Origin"
+            name="origin"
+            value={form.origin}
+            onChange={handleChange}
+            onLatLngChange={(lat, lng) => handleLatLngChange(lat, lng, 'origin')}
+            required
+          />
+
+          {/* Destination with autocomplete and map picker */}
+          <LocationInput
+            label="Destination"
+            name="destination"
+            value={form.destination}
+            onChange={handleChange}
+            onLatLngChange={(lat, lng) => handleLatLngChange(lat, lng, 'dest')}
+            required
+          />
+
           <Field label="Scheduled Date" name="scheduled_date" type="datetime-local" value={form.scheduled_date} onChange={handleChange} />
           <Field label="Notes" name="notes" value={form.notes} onChange={handleChange} />
+
           <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 8 }}>
             <FormBtn variant="secondary" onClick={() => setShowForm(false)}>Cancel</FormBtn>
             <FormBtn onClick={save} disabled={!form.truck_id || !form.driver_id || !form.origin || !form.destination}>Create Trip</FormBtn>
           </div>
         </Modal>
       )}
+
+      {/* Map Picker Modal */}
+      <MapPickerModal
+        isOpen={mapPickerOpen}
+        onClose={() => setMapPickerOpen(false)}
+        onSelect={onMapSelect}
+        initialLat={pickerTarget === 'origin' ? (form.origin_lat || 28.6139) : (form.dest_lat || 28.6139)}
+        initialLng={pickerTarget === 'origin' ? (form.origin_lng || 77.2090) : (form.dest_lng || 77.2090)}
+      />
     </div>
   );
 }
