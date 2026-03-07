@@ -1,7 +1,7 @@
 import React from "react";
 import { useState, useEffect, useCallback } from "react";
 
-const API = process.env.REACT_APP_API_URL || "https://fleetops-gnij.onrender.com/api";
+const API = process.env.REACT_APP_API_URL || "https://noon-cell-trustee-tmp.trycloudflare.com/api";
 
 // ─── ICONS ────────────────────────────────────────────────────────────────────
 const Icon = ({ d, size = 20, color = "currentColor", fill = "none", strokeWidth = 1.8 }) => (
@@ -240,6 +240,7 @@ function Trucks() {
   };
 
   const del = async id => {
+    // eslint-disable-next-line no-restricted-globals
     if (!confirm("Delete this truck?")) return;
     await fetch(`${API}/trucks/${id}`, { method: "DELETE" });
     load();
@@ -351,6 +352,7 @@ function Drivers() {
   };
 
   const del = async id => {
+    // eslint-disable-next-line no-restricted-globals
     if (!confirm("Delete this driver?")) return;
     await fetch(`${API}/drivers/${id}`, { method: "DELETE" });
     load();
@@ -493,6 +495,7 @@ function Trips() {
   };
 
   const del = async id => {
+    // eslint-disable-next-line no-restricted-globals
     if (!confirm("Delete this trip?")) return;
     await fetch(`${API}/trips/${id}`, { method: "DELETE" });
     load();
