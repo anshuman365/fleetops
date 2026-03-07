@@ -2,10 +2,53 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>FleetOps</title>
+    <link rel="icon" href="%PUBLIC_URL%/favicon.ico" />
+
+    <!-- Responsive viewport -->
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="FleetOps" />
+
+    <!-- PWA theme -->
+    <meta name="theme-color" content="#0ea5e9" />
+    <meta name="msapplication-TileColor" content="#060e17" />
+    <meta name="msapplication-navbutton-color" content="#0ea5e9" />
+
+    <!-- SEO -->
+    <meta name="description" content="FleetOps — Professional truck fleet management. Track your trucks, drivers, and trips with ease." />
+    <meta name="keywords" content="fleet management, truck tracker, logistics, driver management" />
+
+    <!-- Open Graph -->
+    <meta property="og:title" content="FleetOps Truck Manager" />
+    <meta property="og:description" content="Professional fleet & truck logistics management system" />
+    <meta property="og:type" content="website" />
+
+    <!-- PWA manifest -->
+    <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
+    <link rel="apple-touch-icon" href="%PUBLIC_URL%/logo192.png" />
+
+    <title>FleetOps — Truck Logistics Manager</title>
+
+    <style>
+      /* Prevent flash of unstyled content */
+      html, body, #root {
+        margin: 0;
+        padding: 0;
+        background-color: #060e17;
+        min-height: 100vh;
+      }
+      /* iOS safe area support */
+      @supports (padding: env(safe-area-inset-bottom)) {
+        body {
+          padding-bottom: env(safe-area-inset-bottom);
+        }
+      }
+    </style>
   </head>
   <body>
+    <noscript>You need to enable JavaScript to run FleetOps.</noscript>
     <div id="root"></div>
   </body>
 </html>
