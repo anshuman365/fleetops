@@ -49,7 +49,8 @@ def start_backend():
         cwd=BACKEND_DIR,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
-        text=True
+        text=True,
+        bufsize=1
     )
     # Give it a moment
     time.sleep(2)
@@ -79,36 +80,14 @@ def extract_tunnel_url():
         if match:
             return match.group(0)
 
-def drain_output(pipe):
-    """Continuously read from a pipe and discard (prevents blocking)."""
+def log_output(pipe, prefix):
+    """Continuously read lines from pipe and print with prefix."""
     try:
-        while True:
-            data = pipe.read(1024)
-            if not data:
-                break
+        for line in iter(pipe.readline, ""):
+            if line:
+                print(f"{prefix} {line}", end="")
     except:
         pass
-
-def ensure_tunnel_alive():
-    """If tunnel died, restart it and return new URL."""
-    global tunnel_proc
-    while True:
-        if tunnel_proc.poll() is not None:
-            print("⚠️  Tunnel process died, restarting...")
-            tunnel_proc = subprocess.Popen(
-                ["cloudflared", "--url", "http://localhost:5000"],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-                bufsize=1
-            )
-            # Extract URL again
-            new_url = extract_tunnel_url()
-            if new_url:
-                return new_url
-        else:
-            # Still alive
-            return None
 
 # ---------- Main flow ----------
 start_backend()
@@ -122,9 +101,20 @@ if not tunnel_url:
 
 print(f"\n✅ Tunnel URL: {tunnel_url}")
 
-# Start a background thread to drain stdout (so tunnel doesn't block)
-drain_thread = threading.Thread(target=drain_output, args=(tunnel_proc.stdout,), daemon=True)
-drain_thread.start()
+# Start logging threads for both processes
+tunnel_log_thread = threading.Thread(
+    target=log_output,
+    args=(tunnel_proc.stdout, "[TUNNEL]"),
+    daemon=True
+)
+tunnel_log_thread.start()
+
+backend_log_thread = threading.Thread(
+    target=log_output,
+    args=(backend_proc.stdout, "[BACKEND]"),
+    daemon=True
+)
+backend_log_thread.start()
 
 # ---------- Update App.js ----------
 print("✏️  Updating frontend App.js with tunnel URL...")
@@ -173,14 +163,12 @@ if has_git_changes():
 else:
     print("ℹ️ No changes to commit. Git step skipped.")
 
-# ---------- Keep running, monitor tunnel ----------
+# ---------- Keep running ----------
 print("\n🎉 Both services are running. Press Ctrl+C to stop.")
 try:
-    while True:
-        time.sleep(5)
-        new_url = ensure_tunnel_alive()
-        if new_url:
-            print(f"🔄 Tunnel restarted with new URL: {new_url}")
-            # Optionally update App.js again? For simplicity, just log.
+    # Wait for the tunnel process (or backend) to exit. If either exits, we exit.
+    tunnel_proc.wait()
 except KeyboardInterrupt:
+    cleanup()
+except:
     cleanup()

@@ -157,10 +157,4 @@ On desktop Chrome, click the install icon in the address bar.
 5. **Update CORS origins** in `app.py` to match your frontend domain
 
 ## 🌐 Current Tunnel URL
-https://lined-upload-apps-accessed.trycloudflare.com
-
-## 🌐 Current Tunnel URL
-https://necklace-louise-apartment-womens.trycloudflare.com
-
-## 🌐 Current Tunnel URL
-https://wall-cake-fax-dim.trycloudflare.com
+https://demand-reads-ear-portfolio.trycloudflare.com
