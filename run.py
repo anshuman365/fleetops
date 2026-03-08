@@ -38,21 +38,43 @@ signal.signal(signal.SIGINT, cleanup)
 signal.signal(signal.SIGTERM, cleanup)
 
 def kill_process_on_port(port):
-    """Try to kill any process using the given port (Linux only)."""
-    try:
-        result = subprocess.run(
-            ["fuser", "-k", f"{port}/tcp"],
-            capture_output=True,
-            text=True
-        )
-        if result.returncode == 0:
-            print(f"✅ Killed process on port {port}")
-        else:
-            # fuser may return non-zero if no process found
+    """Try multiple methods to kill any process using the given port."""
+    methods = []
+
+    # Method 1: fuser (Linux, may not be in Termux)
+    methods.append(["fuser", "-k", f"{port}/tcp"])
+
+    # Method 2: lsof + kill
+    methods.append(["sh", "-c", f"lsof -ti :{port} | xargs -r kill"])
+
+    # Method 3: netstat + awk + kill (busybox style)
+    methods.append(["sh", "-c", f"netstat -tulpn 2>/dev/null | grep ':{port} ' | awk '{{print $7}}' | cut -d'/' -f1 | xargs -r kill"])
+
+    for cmd in methods:
+        try:
+            subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=2)
+        except:
             pass
-    except FileNotFoundError:
-        # fuser not available, just warn
-        print("⚠️  'fuser' not found. If port 5000 is in use, please kill it manually.")
+
+def kill_flask_process():
+    """Kill any existing Python process running app.py (excluding current)."""
+    current_pid = str(os.getpid())
+    try:
+        # Use pgrep if available
+        result = subprocess.run(["pgrep", "-f", "app.py"], capture_output=True, text=True)
+        if result.returncode == 0:
+            pids = result.stdout.strip().split()
+            for pid in pids:
+                if pid != current_pid:
+                    os.kill(int(pid), signal.SIGTERM)
+            time.sleep(1)
+    except:
+        pass
+    # Also try pkill as fallback
+    try:
+        subprocess.run(["pkill", "-f", "app.py"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except:
+        pass
 
 def log_output(pipe, prefix):
     """Read lines from pipe and print with prefix."""
@@ -65,7 +87,11 @@ def log_output(pipe, prefix):
 
 def start_flask():
     global flask_proc
+    # First try to kill any process on port 5000 and any existing flask instance
     kill_process_on_port(5000)
+    kill_flask_process()
+    time.sleep(1)  # Give OS time to release port
+
     print("🚀 Starting Flask app on http://localhost:5000 ...")
     flask_proc = subprocess.Popen(
         [sys.executable, str(BACKEND_SCRIPT)],
@@ -102,15 +128,22 @@ def extract_tunnel_url():
             return match.group(0)
 
 def update_app_js(url):
-    """Replace the fallback API URL in App.js."""
+    """Replace the fallback API URL in App.js (any URL after ||)."""
     if not APP_JS.exists():
         print("❌ App.js not found!")
         return False
     content = APP_JS.read_text(encoding="utf-8")
-    pattern = r'(const API = process\.env\.REACT_APP_API_URL \|\| )"http://localhost:5000/api";'
-    new_content = re.sub(pattern, r'\1' + f'"{url}/api";', content)
+    # Match line: const API = process.env.REACT_APP_API_URL || "anything";
+    pattern = r'(const API = process\.env\.REACT_APP_API_URL \|\| )"[^"]*";'
+    replacement = r'\1' + f'"{url}/api";'
+    new_content = re.sub(pattern, replacement, content)
     if new_content == content:
         print("⚠️  No changes made to App.js (pattern not found).")
+        # Print the actual line for debugging
+        for line in content.splitlines():
+            if "REACT_APP_API_URL" in line:
+                print(f"   Found line: {line.strip()}")
+                break
         return False
     APP_JS.write_text(new_content, encoding="utf-8")
     print("✅ App.js updated.")
