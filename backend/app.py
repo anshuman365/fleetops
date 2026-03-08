@@ -11,6 +11,8 @@ from functools import wraps
 import os, secrets, math, hmac, hashlib
 from dotenv import load_dotenv
 from werkzeug.security import generate_password_hash, check_password_hash
+import os
+from pathlib import Path
 
 load_dotenv()
 
@@ -209,6 +211,13 @@ class TruckLocation(db.Model):
 # HELPERS
 # ═══════════════════════════════════════════════════════════════════════
 
+def get_tunnel_url():
+    """Read tunnel URL from file if available, otherwise return FRONTEND_URL."""
+    tunnel_file = Path(__file__).parent / "tunnel_url.txt"
+    if tunnel_file.exists():
+        return tunnel_file.read_text().strip()
+    return FRONTEND_URL
+
 def haversine(lat1, lon1, lat2, lon2):
     R = 6371
     dl = math.radians(lat2 - lat1)
@@ -223,7 +232,8 @@ def send_verification_email(user):
     user.verify_token_exp = datetime.utcnow() + timedelta(hours=24)
     db.session.commit()
 
-    verify_url = f"{FRONTEND_URL}/verify-email?token={token}"
+    base_url = get_tunnel_url()  # <-- use tunnel URL
+    verify_url = f"{base_url}/verify-email?token={token}"
     html = f"""
     <!DOCTYPE html>
     <html>
@@ -436,6 +446,35 @@ def verify_email():
     access_token = create_access_token(identity=str(user.id))
     return jsonify({'msg': 'Email verified! Welcome to FleetOps.', 'access_token': access_token, 'user': user.to_dict()})
 
+@app.route('/verify-email', methods=['GET'])
+def verify_email_get():
+    token = request.args.get('token', '')
+    user = User.query.filter_by(verify_token=token).first()
+    
+    if not user:
+        return "<h2>Invalid or expired link</h2><p>The verification token is not valid.</p>", 400
+    if user.verify_token_exp < datetime.utcnow():
+        return "<h2>Link expired</h2><p>Please request a new verification email.</p>", 400
+    
+    user.email_verified = True
+    user.verify_token = None
+    user.verify_token_exp = None
+    db.session.commit()
+    
+    # Return a simple success page with a link to login
+    return """
+    <!DOCTYPE html>
+    <html>
+    <head><title>Email Verified</title></head>
+    <body style="background:#060e17;color:#e2f0ff;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh">
+        <div style="text-align:center;background:#0a1520;padding:40px;border-radius:16px;border:1px solid #1e3a52">
+            <h1 style="color:#0ea5e9">✅ Email Verified!</h1>
+            <p>Your account is now active. You can close this window and log in.</p>
+            <a href="/" style="display:inline-block;margin-top:20px;padding:10px 24px;background:#0ea5e9;color:#fff;border-radius:8px;text-decoration:none">Go to Login</a>
+        </div>
+    </body>
+    </html>
+    """
 
 @app.route('/api/resend-verification', methods=['POST'])
 def resend_verification():

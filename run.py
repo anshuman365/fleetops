@@ -189,6 +189,9 @@ if not tunnel_url:
     cleanup()
     sys.exit(1)
 
+tunnel_file = BACKEND_DIR / "tunnel_url.txt"
+tunnel_file.write_text(tunnel_url)
+print(f"✅ Tunnel URL saved to {tunnel_file}")
 print(f"\n✅ Tunnel URL: {tunnel_url}\n")
 
 # Start logging threads for both processes
