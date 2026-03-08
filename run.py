@@ -13,6 +13,7 @@ import re
 import time
 import signal
 import subprocess
+import threading
 from pathlib import Path
 
 # ---------- Paths ----------
@@ -40,52 +41,95 @@ def cleanup(signum=None, frame=None):
 signal.signal(signal.SIGINT, cleanup)
 signal.signal(signal.SIGTERM, cleanup)
 
-# ---------- Start backend ----------
-print("🚀 Starting Flask backend...")
-backend_proc = subprocess.Popen(
-    [sys.executable, str(BACKEND_SCRIPT)],
-    cwd=BACKEND_DIR,
-    stdout=subprocess.PIPE,
-    stderr=subprocess.STDOUT,
-    text=True
-)
+def start_backend():
+    global backend_proc
+    print("🚀 Starting Flask backend...")
+    backend_proc = subprocess.Popen(
+        [sys.executable, str(BACKEND_SCRIPT)],
+        cwd=BACKEND_DIR,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True
+    )
+    # Give it a moment
+    time.sleep(2)
 
-# Give the backend a moment to start
-time.sleep(2)
+def start_tunnel():
+    global tunnel_proc
+    print("🌍 Starting cloudflared tunnel to http://localhost:5000 ...")
+    tunnel_proc = subprocess.Popen(
+        ["cloudflared", "--url", "http://localhost:5000"],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        bufsize=1
+    )
 
-# ---------- Start cloudflared ----------
-print("🌍 Starting cloudflared tunnel to http://localhost:5000 ...")
-tunnel_proc = subprocess.Popen(
-    ["cloudflared", "--url", "http://localhost:5000"],
-    stdout=subprocess.PIPE,
-    stderr=subprocess.STDOUT,
-    text=True,
-    bufsize=1
-)
+def extract_tunnel_url():
+    """Read from tunnel_proc.stdout until we find the URL."""
+    url_pattern = re.compile(r"https://[a-zA-Z0-9.-]+\.trycloudflare\.com")
+    print("⏳ Waiting for tunnel URL...")
+    while True:
+        line = tunnel_proc.stdout.readline()
+        if not line:
+            # EOF: tunnel process died
+            return None
+        print(line, end="")
+        match = url_pattern.search(line)
+        if match:
+            return match.group(0)
 
-# ---------- Extract tunnel URL ----------
-tunnel_url = None
-url_pattern = re.compile(r"https://[a-zA-Z0-9.-]+\.trycloudflare\.com")
+def drain_output(pipe):
+    """Continuously read from a pipe and discard (prevents blocking)."""
+    try:
+        while True:
+            data = pipe.read(1024)
+            if not data:
+                break
+    except:
+        pass
 
-print("⏳ Waiting for tunnel URL...")
-for line in iter(tunnel_proc.stdout.readline, ""):
-    print(line, end="")          # show cloudflared output
-    match = url_pattern.search(line)
-    if match:
-        tunnel_url = match.group(0)
-        print(f"\n✅ Tunnel URL: {tunnel_url}")
-        break
+def ensure_tunnel_alive():
+    """If tunnel died, restart it and return new URL."""
+    global tunnel_proc
+    while True:
+        if tunnel_proc.poll() is not None:
+            print("⚠️  Tunnel process died, restarting...")
+            tunnel_proc = subprocess.Popen(
+                ["cloudflared", "--url", "http://localhost:5000"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1
+            )
+            # Extract URL again
+            new_url = extract_tunnel_url()
+            if new_url:
+                return new_url
+        else:
+            # Still alive
+            return None
 
+# ---------- Main flow ----------
+start_backend()
+start_tunnel()
+
+tunnel_url = extract_tunnel_url()
 if not tunnel_url:
     print("❌ Could not extract tunnel URL. Exiting.")
     cleanup()
     sys.exit(1)
 
+print(f"\n✅ Tunnel URL: {tunnel_url}")
+
+# Start a background thread to drain stdout (so tunnel doesn't block)
+drain_thread = threading.Thread(target=drain_output, args=(tunnel_proc.stdout,), daemon=True)
+drain_thread.start()
+
 # ---------- Update App.js ----------
 print("✏️  Updating frontend App.js with tunnel URL...")
 if APP_JS.exists():
     content = APP_JS.read_text(encoding="utf-8")
-    # Replace the fallback URL after "|| "
     pattern = r'(const API = process\.env\.REACT_APP_API_URL \|\| )"http://localhost:5000/api";'
     new_content = re.sub(pattern, r'\1' + f'"{tunnel_url}/api";', content)
     if new_content != content:
@@ -104,7 +148,6 @@ print("✅ URL saved.")
 
 # ---------- Git commit and push ----------
 def has_git_changes():
-    """Return True if there are any uncommitted changes."""
     result = subprocess.run(
         ["git", "status", "--porcelain"],
         capture_output=True,
@@ -130,9 +173,14 @@ if has_git_changes():
 else:
     print("ℹ️ No changes to commit. Git step skipped.")
 
-# ---------- Keep running ----------
+# ---------- Keep running, monitor tunnel ----------
 print("\n🎉 Both services are running. Press Ctrl+C to stop.")
 try:
-    tunnel_proc.wait()
+    while True:
+        time.sleep(5)
+        new_url = ensure_tunnel_alive()
+        if new_url:
+            print(f"🔄 Tunnel restarted with new URL: {new_url}")
+            # Optionally update App.js again? For simplicity, just log.
 except KeyboardInterrupt:
     cleanup()
