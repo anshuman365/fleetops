@@ -23,13 +23,13 @@ app.config['JWT_ACCESS_TOKEN_EXPIRES']       = timedelta(days=7)
 app.config['MAIL_SERVER']                    = os.getenv('MAIL_SERVER', 'smtp.gmail.com')
 app.config['MAIL_PORT']                      = int(os.getenv('MAIL_PORT', 587))
 app.config['MAIL_USE_TLS']                   = True
-app.config['MAIL_USERNAME']                  = os.getenv('MAIL_USERNAME', '')
-app.config['MAIL_PASSWORD']                  = os.getenv('MAIL_PASSWORD', '')
-app.config['MAIL_DEFAULT_SENDER']            = os.getenv('MAIL_DEFAULT_SENDER', 'noreply@fleetops.app')
+app.config['MAIL_USERNAME']                  = os.getenv('MAIL_USERNAME', 'nexoraindustries@gmail.com')
+app.config['MAIL_PASSWORD']                  = os.getenv('MAIL_PASSWORD', 'qvwi hqax ehqx hsgw')
+app.config['MAIL_DEFAULT_SENDER']            = os.getenv('MAIL_DEFAULT_SENDER', 'anshumansingh3697@gmail.com')
 
-FRONTEND_URL    = os.getenv('FRONTEND_URL', 'http://localhost:3000')
-RAZORPAY_KEY    = os.getenv('RAZORPAY_KEY_ID', 'rzp_test_yourkeyhere')
-RAZORPAY_SECRET = os.getenv('RAZORPAY_KEY_SECRET', 'your_razorpay_secret')
+FRONTEND_URL    = os.getenv('FRONTEND_URL', 'https://fleetops-altivonholdings.onrender.com')
+RAZORPAY_KEY    = os.getenv('RAZORPAY_KEY_ID', 'rzp_test_3zY0ARX7fQKOSi')
+RAZORPAY_SECRET = os.getenv('RAZORPAY_KEY_SECRET', 'gDUS0jdD0zznPsBotkLZP86O')
 PREMIUM_PRICE   = 99900  # paise = Rs 999
 
 CORS(app, supports_credentials=True, origins=[

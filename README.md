@@ -155,3 +155,9 @@ On desktop Chrome, click the install icon in the address bar.
 3. **Payment integration** — replace the demo upgrade flow with Razorpay/Stripe
 4. **HTTPS required** for PWA features (Render provides it for free)
 5. **Update CORS origins** in `app.py` to match your frontend domain
+
+## 🌐 Current Tunnel URL
+https://lined-upload-apps-accessed.trycloudflare.com
+
+## 🌐 Current Tunnel URL
+https://necklace-louise-apartment-womens.trycloudflare.com
