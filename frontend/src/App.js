@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef, createContext, useContext } from "react";
 
-const API = process.env.REACT_APP_API_URL || "https://typical-ease-arrange-colony.trycloudflare.com/api";
+const API = process.env.REACT_APP_API_URL || "https://wifi-gods-fastest-screens.trycloudflare.com/api";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // AUTH CONTEXT
